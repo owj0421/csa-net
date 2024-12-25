@@ -1,4 +1,9 @@
-![header](https://capsule-render.vercel.app/api?type=rounded&height=200&color=gradient&customColorList=20&text=🧷%20Fashion%20Recommenders&fontSize=36&fontColor=FFFFFF&fontAlignY=45&desc=An%20easy-to-use%20package%20for%20fashion%20recommendation%20models%20with%20PyTorch&descSize=12&descAlignY=65)<br>
+<div style="width: 100%;">
+  <img src="title.svg" style="width: 100%;" alt="Click to see the source">
+</div>
+
+<br>
+
 <div align="center">
 
 ![Python Versions](https://img.shields.io/badge/python-3.7%20|%203.8%20|%203.9%20|%203.10-blue)
