@@ -20,7 +20,7 @@
           width: 100%;
           height: 160px;
           box-sizing: border-box;
-          padding: 24px;
+          padding: 32px;
           display: flex;
           flex-direction: column;   /* 요소들을 수직으로 배치 */
           justify-content: center;
@@ -56,7 +56,7 @@
             margin: 0 0 0 0;
         }
         .title.sub {
-            font-size: 10px;
+            font-size: 8px;
             font-weight: 400;
             margin: 0 0 0 0;
         }
