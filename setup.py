@@ -11,7 +11,7 @@ setup(
     name='', 
     
     # version 명시
-    version='0.0.1',
+    version='0.0.4',
     
     # package에 대한 짧은 description
     description='',
@@ -36,11 +36,11 @@ setup(
     python_requires='>=3.10',  
     
     install_requires = [
-        "pytorch==2.5.0",
-        "torchvision==0.20.0",
-        "torchaudio==2.5.0",
-        "pillow==11.0.0",
-        "transformers==4.46.1",
+        "torch>=2.5.0",
+        "torchvision>=0.20.0",
+        "torchaudio>=2.5.0",
+        "pillow>=11.0.0",
+        "transformers>=4.46.1",
         "wandb",
         "tqdm",
         "scikit-learn",
