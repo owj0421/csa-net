@@ -26,6 +26,11 @@ Although numerous advanced recommendation methods have been proposed in the lite
 We welcome community contributions! From adding new models and features to optimizing existing implementations or exploring innovative ideas, your input is invaluable to the growth of Fashion Recommenders.
 <br><br>
 
+## 📥 Installation
+```
+pip install fashion_recommenders==0.0.4
+```
+
 
 ## 📚 Supported Models
 
