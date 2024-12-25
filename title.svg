@@ -55,6 +55,7 @@
         .title.main {
             font-size: 32px;
             font-weight: 600;
+            line-height: 1.2;
             margin: 8px 0 0 0;
         }
         .title.sub {
