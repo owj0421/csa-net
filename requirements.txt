@@ -1,8 +1,10 @@
-python==3.9.16
-torch==1.12.1
-torchvision==0.14.1
-transformers==4.29.2
-albumentations
-cv2
+pytorch==2.5.0
+torchvision==0.20.0
+torchaudio==2.5.0
+pillow==11.0.0
+transformers==4.46.1
 wandb
 tqdm
+scikit-learn
+gradio
+faiss-gpu
