@@ -19,6 +19,7 @@ class BaseCPPipeline(ABC):
 
     @abstractmethod
     def predict(
+        self,
         outfits: List[Outfit],
     ) -> List[float]:
         
@@ -41,6 +42,7 @@ class BaseCIRPipeline(ABC):
 
     @abstractmethod
     def search(
+        self,
         queries: List[Query],
         k: int,
     ) -> List[List[Item]]:

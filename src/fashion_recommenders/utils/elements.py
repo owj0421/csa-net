@@ -6,8 +6,8 @@ Author:
 
 # import PIL import Image
 
-from PIL.Image import Image
-
+from PIL.Image import Image as ImageClass
+from PIL import Image
 from dataclasses import dataclass
 from typing import List, Optional, Literal
 from torch import Tensor
@@ -17,25 +17,23 @@ from pydantic import  Field
 @dataclass
 class Item:
     item_id: Optional[str] = Field(
-        default=None,
+        default=0,
         description="ID of the item. Which is mapped to `id` in the 'ItemLoader`",
     )
-    image: Optional[Image] = Field(
-        default=None,
+    image: Optional[ImageClass] = Field(
+        default=Image.new("RGB", (224, 224)),
         description="Image of the item",
     )
     image_path: Optional[str] = Field(
-        default=None,
+        default="",
         description="Image Path of the item",
     )
     description: Optional[str] = Field(
-        default=None,
+        default="",
         description="Description of the item",
     )
-    category: Optional[
-        str
-    ] = Field(
-        default=None,
+    category: Optional[str] = Field(
+        default="",
         description="Category of the item",
     )
     
@@ -43,7 +41,7 @@ class Item:
 @dataclass
 class Outfit:
     items: Optional[List[Item]] = Field(
-        default=None,
+        default=[Item()],
         description="List of items in the outfit",
     )
     

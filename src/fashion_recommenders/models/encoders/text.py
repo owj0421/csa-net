@@ -132,7 +132,7 @@ class HuggingFaceTextEncoder(BaseTextEncoder):
         batch_size = len(texts)
         texts = sum(texts, [])
 
-        tokenizer_kargs = tokenizer_kargs or {
+        tokenizer_kargs = tokenizer_kargs if tokenizer_kargs is not None else {
             'max_length': 16,
             'padding': 'max_length',
             'truncation': True,
@@ -194,26 +194,28 @@ class CLIPTextEncoder(BaseTextEncoder):
             raise ValueError('All sequences in texts should have the same length.')
 
         batch_size = len(texts)
-        texts = sum(texts, [])
+        texts: List[str] = sum(texts, []) # 
         
-        tokenizer_kargs = tokenizer_kargs or {
+        tokenizer_kargs = tokenizer_kargs if tokenizer_kargs is not None else {
             'max_length': 16,
             'padding': 'max_length',
             'truncation': True,
         }
-        
         tokenizer_kargs['return_tensors'] = 'pt'
         
         inputs = self.tokenizer(
-            texts, **self.tokenizer_args
+            text=texts, **tokenizer_kargs
         )
+        
         inputs = {
             key: value.to(self.device) 
             for key, value in inputs.items()
         }
+        
         text_embeddings = self.model(
             **inputs
         ).text_embeds
+        
         text_embeddings = text_embeddings.view(
             batch_size, -1, self.encodeding_size
         )    

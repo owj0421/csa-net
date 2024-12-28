@@ -189,10 +189,11 @@ class CLIPImageEncoder(BaseImageEncoder):
         batch_size = len(images)
         images = sum(images, [])
         
+        processor_kargs = processor_kargs if processor_kargs is not None else {}
         processor_kargs['return_tensors'] = 'pt'
         
         transformed_images = self.processor(
-            images=images, **self.processor_kargs
+            images=images, **processor_kargs
         ).to(self.device)
         
         image_embeddings = self.model(

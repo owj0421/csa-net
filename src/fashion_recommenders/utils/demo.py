@@ -199,6 +199,7 @@ def demo(
             outputs=[inputs_gallery, outfit_selected_idx]
         )
         
+        
         if task == 'cp':   
             gr.Markdown(
                 "### 3. Compute Score"
@@ -214,10 +215,14 @@ def demo(
                         label="Compatibility Score",
                         interactive=False
                     )
-            btn_evaluate.click(
-                pipeline.predict(
+            
+            def predict():
+                return pipeline.predict(
                     outfits=[elements.Outfit(items=manager.items)]
-                )[0],
+                )[0]
+            
+            btn_evaluate.click(
+                predict,
                 inputs=None,
                 outputs=score
             )
@@ -231,7 +236,7 @@ def demo(
                     query = gr.Radio(
                         label="Category",
                         choices=constants.CATEGORIES,
-                        value=None,
+                        value="",
                     )
                     # query = gr.Textbox(
                     #     label="Enter Query",
@@ -248,14 +253,16 @@ def demo(
                         rows=3,
                         type="pil",
                     )
-            btn_search.click(
-                pipeline.search(
-                    queries=[elements.Query(
-                        query=query, 
-                        items=manager.items
-                    )],
+                    
+            def search(query):
+                items = pipeline.search(
+                    queries=[elements.Query(query=query, items=manager.items)],
                     k=ITEM_PER_PAGE
-                )[0],
+                )[0]
+                return [item.image for item in items]
+                
+            btn_search.click(
+                search,
                 inputs=query,
                 outputs=search_result_gallery
             )

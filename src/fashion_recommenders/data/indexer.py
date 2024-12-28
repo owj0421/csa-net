@@ -23,7 +23,7 @@ class BaseIndexer(ABC):
         pass
     
     @abstractmethod
-    def search_items(self, embeddings: List[float], top_k: int) -> List[List[int]]:
+    def search(self, embeddings: List[float], top_k: int) -> List[List[int]]:
         pass
     
     @abstractmethod
@@ -93,10 +93,10 @@ class FAISSIndexer(BaseIndexer):
             
             self.index = faiss.IndexIDMap2(index)
             
-    def search_items(
+    def search(
         self, 
         embeddings: np.array, 
-        top_k: int,
+        k: int,
         index_batch_size: int = 2048,
     ) -> List[List[int]]:
         
@@ -122,7 +122,7 @@ class FAISSIndexer(BaseIndexer):
                 batch_embeddings = batch_embeddings[np.newaxis, :]
                 
             batch_scores, batch_faiss_ids = self.index.search(
-                batch_embeddings, k=top_k
+                batch_embeddings, k=k
             )
             for scores, faiss_ids in zip(batch_scores, batch_faiss_ids):
                 # outputs.append([
