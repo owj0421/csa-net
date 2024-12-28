@@ -81,12 +81,6 @@ class SQLiteItemLoader(BaseItemLoader):
                 f"Directory {db_dir} created."
             )
             
-        # self.image_dir = image_dir
-        # if not Path(image_dir).exists():
-        #     raise ValueError(
-        #         f"Image directory {image_dir} not found."
-        #     )
-        
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._create_table()
 
@@ -103,15 +97,6 @@ class SQLiteItemLoader(BaseItemLoader):
         self.conn.execute(query)
         self.conn.commit()
         
-    # def _get_image(self, item_id: int) -> Image.Image:
-    #     path = Path(self.image_dir) / f"{item_id}.jpg"
-    #     if path.exists():
-    #         return Image.open(path)
-        
-    #     raise ValueError(
-    #         f"Image for item ID {item_id} not found."
-    #     )
-
     def get_item(self, item_id: int) -> elements.Item:
         query = """
         SELECT * FROM items 

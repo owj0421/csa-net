@@ -6,6 +6,7 @@ import torch
 import random
 from . import elements
 from . import constants
+from ..models.pipeline import BaseCPPipeline, BaseCIRPipeline
 from argparse import ArgumentParser
 
 
@@ -63,43 +64,16 @@ class DBBuffer:
 
 
 def demo(
-    model,
-    item_loader,
-    task: Literal['cp', 'cir'] = 'cp',
-    indexer = None
+    pipeline
 ):
-    if task == 'cir' and indexer is None:
-        raise ValueError(
-            "Indexer must be provided for type='cir'"
-        )
+    if isinstance(pipeline, BaseCPPipeline):
+        task = 'cp'
+    elif isinstance(pipeline, BaseCIRPipeline):
+        task = 'cir'
 
     manager = OutfitManager()
     db_candidates_buffer = DBBuffer()
-    
-    @torch.no_grad()
-    def cp():
-        return float(model.predict([elements.Outfit(items=manager.items)])[0])
-    
-    @torch.no_grad()
-    def cir(query):
-        query = elements.Query(
-            query=query,
-            items=manager.items
-        )
 
-        embeddings = model.embed_query([query]).detach().cpu().numpy()
-
-        res = indexer.search_items(
-            embeddings=embeddings,
-            top_k=12
-        )[0]
-        images = [
-            item_loader(int(i)).image 
-            for i in res
-        ]
-        
-        return images
-    
     with gr.Blocks() as demo:
         outfit_selected_idx = gr.State(value=None)
         
@@ -139,8 +113,8 @@ def demo(
                 )
 
             def update_db_candidates_gallery_category(selected_category):
-                db_candidates_buffer.items=item_loader.paginate_items(page=1, item_per_page=ITEM_PER_PAGE, category=selected_category)
-                total_pages = item_loader.total_pages(item_per_page=ITEM_PER_PAGE, category=selected_category)
+                db_candidates_buffer.items=pipeline.loader.paginate_items(page=1, item_per_page=ITEM_PER_PAGE, category=selected_category)
+                total_pages = pipeline.loader.total_pages(item_per_page=ITEM_PER_PAGE, category=selected_category)
                 return (
                     gr.update(value=[item.image for item in db_candidates_buffer.items]),
                     gr.update(choices=[i for i in range(1, total_pages + 1)], value=1) # Reset Value
@@ -153,7 +127,7 @@ def demo(
             )
             
             def update_db_candidates_gallery_by_page(selected_page, selected_category):
-                db_candidates_buffer.items=item_loader.paginate_items(page=selected_page, item_per_page=ITEM_PER_PAGE, category=selected_category)
+                db_candidates_buffer.items=pipeline.loader.paginate_items(page=selected_page, item_per_page=ITEM_PER_PAGE, category=selected_category)
                 return gr.update(value=[item.image for item in db_candidates_buffer.items])
             
             db_candidates_gallery_page.change(
@@ -241,7 +215,9 @@ def demo(
                         interactive=False
                     )
             btn_evaluate.click(
-                cp,
+                pipeline.predict(
+                    outfits=[elements.Outfit(items=manager.items)]
+                )[0],
                 inputs=None,
                 outputs=score
             )
@@ -273,7 +249,13 @@ def demo(
                         type="pil",
                     )
             btn_search.click(
-                cir,
+                pipeline.search(
+                    queries=[elements.Query(
+                        query=query, 
+                        items=manager.items
+                    )],
+                    k=ITEM_PER_PAGE
+                )[0],
                 inputs=query,
                 outputs=search_result_gallery
             )
