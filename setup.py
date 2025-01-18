@@ -16,6 +16,7 @@ install_requires = [
     "scikit-learn",
     "gradio",
     "faiss-gpu",
+    "sqlalchemy",
 ],
 
 # long description을 README.md로 대체하기 위한 작업
