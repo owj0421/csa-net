@@ -33,7 +33,7 @@ We welcome community contributions! From adding new models and features to optim
 
 ## 📥 Installation
 ```
-pip install fashion_recommenders==0.0.4
+pip install fashion_recommenders==0.1.0
 ```
 
 
