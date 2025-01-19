@@ -205,8 +205,8 @@ def run(
             
             def __btn_evaluate_click():
                 score_ = pipeline.compatibility_predict(
-                    queries=[datatypes.FashionCompatibilityQuery(outfit=my_items)]
-                )[0]
+                    query=datatypes.FashionCompatibilityQuery(outfit=my_items)
+                )
                 return score_
             btn_evaluate.click(
                 __btn_evaluate_click,
@@ -241,9 +241,9 @@ def run(
                     
             def __btn_search_click(category):
                 items = pipeline.complementary_search(
-                    queries=[datatypes.FashionComplementaryQuery(category=category, outfit=my_items)],
+                    query=datatypes.FashionComplementaryQuery(category=category, outfit=my_items),
                     k=ITEM_PER_PAGE
-                )[0]
+                )
                 return [item.image for item in items]
             
             btn_search.click(

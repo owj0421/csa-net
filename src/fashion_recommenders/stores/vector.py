@@ -20,6 +20,7 @@ from tqdm import tqdm
 import os
 import faiss
 import pathlib
+from collections import defaultdict
 
 from . import vector_funcs
 
@@ -58,9 +59,30 @@ class ItemVectorStore:
         embeddings: List[List[float]],
         k: int,
         batch_size: int = 2048,
-    ) -> List[Tuple[int]]:
+    ) -> List[Tuple[float, int]]:
         return vector_funcs.search(self.index, embeddings, k, batch_size)
     
     
     def save(self):
         vector_funcs.save(self.index, self.index_path)
+        
+        
+    def multi_vector_search(
+        self,
+        embeddings: List[List[List[float]]],
+        k: int,
+        batch_size: int = 2048,
+    ) -> List[List[int]]:
+        """RRF Search
+        """
+        ids = []
+        for es in embeddings: # es: (n_query_items, d_embed)
+            scores = defaultdict(list)
+            for result in self.search(es, 100, batch_size):
+                for score, item_id in result:
+                    scores[item_id].append(score)
+            scores = {item_id: np.mean(score) for item_id, score in scores.items()}
+            scores = sorted(scores.items(), key=lambda x: x[1], reverse=True) # [(id, score), ...]
+            ids.append(list(map(lambda x: x[0], scores))[:k])
+            
+        return ids

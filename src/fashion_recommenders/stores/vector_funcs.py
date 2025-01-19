@@ -69,13 +69,16 @@ def search(
     embeddings: List[List[float]], 
     k: int,
     batch_size: int = 2048,
-) -> List[Tuple[int]]:
+) -> List[Tuple[float, int]]:
     outputs = []
     for batch in utils.batch_iterable(embeddings, batch_size, desc="[FAISS] Searching"):
         scores, faiss_ids = index.search(
             np.array(batch), k=k
         )
-        outputs += faiss_ids.tolist()
+        scores = scores.tolist()
+        faiss_ids = faiss_ids.tolist()
+        for scores_, faiss_ids_ in zip(scores, faiss_ids):
+            outputs.append(list(zip(scores_, faiss_ids_)))
         
     return outputs
 
