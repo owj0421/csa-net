@@ -1,7 +1,7 @@
 import numpy as np
 import typing 
 from sklearn.metrics import roc_auc_score
-
+from typing import List
 
 def compute_accuracy(
     predictions: np.array,
@@ -14,33 +14,30 @@ class ComplementaryScore(typing.TypedDict):
     acc = typing.Union[float, None]
     
 
-class ComplementaryMetricCalculator():
-    __predictions = np.array([])
-    __labels = np.array([])
+class ComplementaryMetricCalculator:
+    def __init__(self):
+        self.__predictions = np.array([], dtype=int)
+        self.__labels = np.array([], dtype=int)
 
     def add(
         self, 
-        query_embeddings: np.array, # (batch_size, embedding_dim)
-        candidate_embeddings: np.array, # (batch_size, num_candidates, embedding_dim)
-        labels: np.array # (batch_size)
+        query_embeddings: List[np.array],  # batch_size list of (n_items, embedding_dim)
+        candidate_embeddings: List[np.array],  # batch_size list of (num_candidates, embedding_dim)
+        labels: np.array  # (batch_size,)
     ):
-        if query_embeddings.ndim == 1:
-            query_embeddings = np.expand_dims(query_embeddings, axis=0)
-        if candidate_embeddings.ndim == 2:
-            candidate_embeddings = np.expand_dims(candidate_embeddings, axis=0)
+        batch_sz = len(query_embeddings)
         
-        batch_sz, n_candidates, d_embedding = candidate_embeddings.shape
+        # Compute pairwise distances in a vectorized manner
+        dists = np.array([
+            np.sum(
+                np.linalg.norm(qs[:, None, :] - cs[None, :, :], axis=2), axis=0
+            )
+            for qs, cs in zip(query_embeddings, candidate_embeddings)
+        ])  # Shape: (batch_sz, num_candidates)
         
-        query_embeddings_repeated = np.repeat(query_embeddings[:, np.newaxis, :], n_candidates, axis=1)
-        query_embeddings_reshaped = query_embeddings_repeated.reshape(-1, d_embedding)
-        candidate_embeddings_reshaped = candidate_embeddings.reshape(-1, d_embedding)
-        query_cand_dist = np.linalg.norm(query_embeddings_reshaped - candidate_embeddings_reshaped, axis=1)
-        dist = query_cand_dist.reshape(batch_sz, n_candidates)
-        
-        predictions = dist.argmin(axis=1)
-        
-        self.__predictions = np.concatenate([self.__predictions, predictions])
-        self.__labels = np.concatenate([self.__labels, labels])
+        predictions = dists.argmin(axis=1)  # Get the index of the closest candidate
+        self.__predictions = np.append(self.__predictions, predictions)
+        self.__labels = np.append(self.__labels, labels)
         
         return ComplementaryScore(
             acc=compute_accuracy(predictions, labels),

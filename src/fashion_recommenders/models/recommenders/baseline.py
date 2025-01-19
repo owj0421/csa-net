@@ -22,24 +22,49 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
+
+from abc import ABC, abstractmethod
+
 from ..encoders.image import BaseImageEncoder
 from ..encoders.text import BaseTextEncoder
+from ...datatypes import FashionCompatibilityQuery, FashionComplementaryQuery, FashionItem
 
 
-class BaseRecommender(nn.Module):
-    def __init__(
-        self,
-        embedding_dim: Optional[int] = 32,
-        categories: Optional[List[str]] = None,
-        img_backbone: Literal['resnet-18', 'vgg-13', 'swin-transformer', 'vit', 'none'] = 'resnet-18',
-        txt_backbone: Literal['bert', 'none'] = 'none',
-    ):
-        super().__init__()
-        pass
 
 
-    def predict(self):
-        pass
+
+class BaseRecommender(ABC, nn.Module):
     
-    def embed(self):
-        pass
+    def __init__(self):
+        super(BaseRecommender, self).__init__()
+
+
+    @abstractmethod
+    def predict(
+        self, queries=List[FashionCompatibilityQuery]
+    ) -> Tensor: 
+        # (batch_size, 1)
+        raise NotImplementedError(
+            "This method should be implemented in the subclass"
+        )
+    
+    
+    @abstractmethod
+    def embed_query(
+        self, queries=List[FashionComplementaryQuery]
+    ) -> List[Tensor]: 
+        # For Element-wise models(Type-aware-net etc...) : batched list of (n_items, embedding_dim)
+        # For Set-wise models(Outfit-transformer etc...) : batched list of (1, embedding_dim)
+        raise NotImplementedError(
+            "This method should be implemented in the subclass"
+        )
+    
+    
+    @abstractmethod
+    def embed_items(
+        self, items=List[FashionItem]
+    ) -> Tensor: 
+        # (n_items, embedding_dim)
+        raise NotImplementedError(
+            "This method should be implemented in the subclass"
+        )

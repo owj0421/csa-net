@@ -1,18 +1,24 @@
+from typing import Iterable, Any, Optional
+from itertools import islice
 from tqdm import tqdm
-from typing import List, Any, Optional, Dict, Union, Tuple, Iterable
-
-
 
 def batch_iterable(
     iterable: Iterable[Any],
     batch_size: int,
     desc: Optional[str] = None,
 ):
+    iterator = iter(iterable)
+    total = len(iterable) if hasattr(iterable, '__len__') else None
+    
     pbar = tqdm(
-        range(0, len(iterable), batch_size), 
-        desc=desc, 
-        total=(len(iterable) + batch_size - 1) // batch_size
+        total=(total + batch_size - 1) // batch_size if total else None,
+        desc=desc,
     )
     
-    for i in pbar:
-        yield iterable[i:i + batch_size]
+    while True:
+        batch = list(islice(iterator, batch_size))
+        if not batch:
+            break
+        yield batch
+        if pbar.total:  # Update progress only if total is known
+            pbar.update(1)
