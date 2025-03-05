@@ -1,6 +1,50 @@
-from typing import Optional
-from torch import Tensor
+import os
+import random
+import numpy as np
 import torch
+from typing import Iterable, Any, Optional
+from itertools import islice
+from tqdm import tqdm
+import torch
+from torch import Tensor
+import torch.nn.functional as F
+
+
+def seed_everything(seed: int):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    
+    
+def batch_iterable(
+    iterable: Iterable[Any],
+    batch_size: int,
+    desc: Optional[str] = None,
+):
+    iterator = iter(iterable)
+    total = len(iterable) if hasattr(iterable, '__len__') else None
+    
+    pbar = tqdm(
+        total=(total + batch_size - 1) // batch_size if total else None,
+        desc=desc,
+    )
+    
+    while True:
+        batch = list(islice(iterator, batch_size))
+        if not batch:
+            break
+        yield batch
+        if pbar.total:  # Update progress only if total is known
+            pbar.update(1)
+            
+            
+def get_device(model: torch.nn.Module) -> torch.device:
+    return next(model.parameters()).device
 
 
 def freeze_model(model):
@@ -13,17 +57,6 @@ def aggregate_embeddings(
     text_embeddings: Optional[Tensor] = None, 
     aggregation_method: str = 'concat'
 ) -> Tensor:
-    """
-    Aggregates image and text embeddings using the specified method.
-
-    Args:
-        image_embeds (Optional[Tensor]): Tensor containing image embeddings, shape (..., D).
-        text_embeds (Optional[Tensor]): Tensor containing text embeddings, shape (..., D).
-        aggregation_method (str): Method to aggregate embeddings ('concat' or 'mean').
-
-    Returns:
-        Tensor: Aggregated embeddings.
-    """
     embeds = []
     if image_embeddings is not None:
         embeds.append(image_embeddings)
@@ -45,16 +78,6 @@ def mean_pooling(
     model_output: Tensor, 
     attention_mask: Tensor
 ) -> Tensor:
-    """
-    Applies mean pooling on token embeddings, weighted by the attention mask.
-
-    Args:
-        model_output (Tensor): Output tensor from the transformer model, shape (batch_size, seq_length, hidden_size).
-        attention_mask (Tensor): Attention mask tensor, shape (batch_size, seq_length).
-
-    Returns:
-        Tensor: Mean-pooled embeddings, shape (batch_size, hidden_size).
-    """
     token_embeddings = model_output[0]  # First element of model_output contains the hidden states
     input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
 
