@@ -11,7 +11,7 @@ import math
 import wandb
 from tqdm import tqdm
 from itertools import chain
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from torchvision import datasets, transforms
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union, Literal
 
@@ -28,21 +28,24 @@ from torchvision.models import resnet18, ResNet18_Weights
 from ..data.datatypes import (
     FashionCompatibilityQuery, FashionComplementaryQuery, FashionItem
 )
-from ..utils.utils import get_device
 
-POLYVORE_CATEGORIES = [
-    'all-body', 'bottoms', 'tops', 'outerwear', 'bags', 
-    'shoes', 'accessories', 'scarves', 'hats', 
-    'sunglasses', 'jewellery', 'unknown'
-]
+# POLYVORE_CATEGORIES = 
 
+def get_device(model: torch.nn.Module) -> torch.device:
+    return next(model.parameters()).device
+
+def get_default_category():
+    return [
+        'all-body', 'bottoms', 'tops', 'outerwear', 'bags', 
+        'shoes', 'accessories', 'scarves', 'hats', 
+        'sunglasses', 'jewellery'
+    ]
 
 @dataclass
 class CSANetConfig:
     n_subspace: int = 5
     d_embed: int = 128
-    
-    category: List[str] = POLYVORE_CATEGORIES
+    category: List[str] = field(default_factory=get_default_category)
     d_category: int = 16
     
     
@@ -58,11 +61,12 @@ class CSANetEncoder(nn.Module):
             weights=ResNet18_Weights.DEFAULT
         )
         self.cnn.fc = nn.Linear(
-            in_features=self.model.fc.in_features, 
+            in_features=self.cnn.fc.in_features, 
             out_features=self.cfg.d_embed
         )
         self.m = nn.Parameter(
-            torch.randn(self.cfg.n_subspace, self.cfg.d_embed)
+            torch.randn(self.cfg.n_subspace, self.cfg.d_embed),
+            requires_grad=True
         )
         # Preprocessing
         self.transform = transforms.Compose([
@@ -78,6 +82,7 @@ class CSANetEncoder(nn.Module):
     
     def forward(self, images: List[np.ndarray]):  
         images = self._preprocess(images)
+        images = images.to(get_device(self))
         x = self.cnn(images).unsqueeze(1) # (batch_size, 1, d_embed)
         m = self.m.unsqueeze(0) # (1, n_subspace, d_embed)
         outs = x * m # (batch_size, n_subspace, d_embed)
@@ -85,22 +90,23 @@ class CSANetEncoder(nn.Module):
         return outs
     
     
-class CSANetSubspaceWeightGenerator(nn.Module):
+class CSANetSubspaceAttention(nn.Module):
     UNKNOWN_CATEGORY = 'unknown'
     
     def __init__(self, cfg: CSANetConfig):
         super().__init__()
         self.cfg = cfg if cfg is not None else CSANetConfig()
         self.cfg.category = self.cfg.category + [self.UNKNOWN_CATEGORY]
+        self.category = self.cfg.category
         
         self.category_embedding = nn.Embedding(
             num_embeddings=len(self.category),
-            embedding_dim=self.d_category
+            embedding_dim=self.cfg.d_category
         )
         self.attention_weight_ffn = nn.Sequential(
-            nn.Linear(self.d_category, self.d_category),
+            nn.Linear(self.cfg.d_category, self.cfg.d_category),
             nn.ReLU(),
-            nn.Linear(self.d_category, self.n_subspace)
+            nn.Linear(self.cfg.d_category, self.cfg.n_subspace)
         )
         
     def to_emb_idx(self, category: List[str]):
@@ -110,22 +116,25 @@ class CSANetSubspaceWeightGenerator(nn.Module):
             [self.category.index(c) for c in category]
         )
         
-    def forward(self, category: List[str], target_category: list[str]): # -> (batch_size, n_subspace)
-        emb_idxs = self.to_emb_idx(category)
-        target_emb_idxs = self.to_emb_idx(target_category)
+    def forward(self, subspace_cateogory_set: List[Tuple[str, str]]): # -> (batch_size, n_subspace)
+        category, target_category = zip(*subspace_cateogory_set)
+        
+        emb_idxs = self.to_emb_idx(category).to(get_device(self))
+        target_emb_idxs = self.to_emb_idx(target_category).to(get_device(self))
         
         embs = self.category_embedding(emb_idxs) # (batch_size, d_category)
         target_embs = self.category_embedding(target_emb_idxs) # (batch_size, d_category)
         
-        # Normalize Each Embedding
         embs = F.normalize(embs, p=2, dim=-1)
         target_embs = F.normalize(target_embs, p=2, dim=-1)
         
-        # Add operation for Symmetric Operation
         embs = embs + target_embs # (batch_size, d_category)
         
-        # Calculate Attention Weight
         w = self.attention_weight_ffn(embs) # (batch_size, n_subspace)
         w = F.softmax(w, dim=-1)
         
-        return w
+        w_idx_dict = {
+            subspace_cateogory_set[i]: i for i in range(len(subspace_cateogory_set))
+        }
+        
+        return w_idx_dict, w

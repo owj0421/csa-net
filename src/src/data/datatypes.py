@@ -15,7 +15,6 @@ class FashionItem(BaseModel):
         description="Category of the item"
     )
     image: Optional[Image.Image] = Field(
-        default=None,
         description="Image of the item"
     )
     description: Optional[str] = Field(
