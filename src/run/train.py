@@ -58,49 +58,81 @@ class InBatchOutfitRankingLoss(nn.Module):
         self.reduction = reduction
         self.return_score = return_score
         
-    def forward(self, w_idx_dict, w, batched_anc_cat, batched_anc_emb, batched_pos_cat, batched_pos_emb, mask):
+    def forward(
+        self, 
+        w_idx_dict, 
+        w, 
+        batched_anchor_category, 
+        batched_anchor_emb, 
+        batched_positive_category, 
+        batched_positive_emb, 
+        mask
+    ):
         """_summary_
 
         Args:
-            w_dict (_type_): Dictionary of Subspace Attention Weights, Dictionary with {str: tensor of dim (n_sp, d_emb)}
-            batched_anc_cat (_type_): Categories of Items in Query Outfit, List of string (bsz, max_length)
-            batched_anc_emb (_type_): Embedding of Items in Query Outfit with Subspace, dim: (bsz, max_length, n_sp, d_emb)
-            batched_pos_cat (_type_): Categories of Items in Answer Outfit, List of string (bsz, 1)
-            batched_pos_emb (_type_): Embedding of Items in Answer Outfit with Subspace, dim: (bsz, n_sp, d_emb)
+            w_dict (_type_): Dictionary of Subspace Attention Weights, Dictionary with {str: tensor of dim (n_subspace, d_emb)}
+            batched_anchor_category (_type_): Categories of Items in Query Outfit, List of string (bsz, max_length)
+            batched_anc_emb (_type_): Embedding of Items in Query Outfit with Subspace, dim: (bsz, max_length, n_subspace, d_emb)
+            batched_positive_category (_type_): Categories of Items in Answer Outfit, List of string (bsz, 1)
+            batched_positive_emb (_type_): Embedding of Items in Answer Outfit with Subspace, dim: (bsz, n_subspace, d_emb)
         """
-        bsz = batched_anc_emb.shape[0]
-        max_length = batched_anc_emb.shape[1]
-        n_sp = batched_anc_emb.shape[2]
-        d_emb = batched_anc_emb.shape[3]
+        bsz = batched_anchor_emb.shape[0]
+        max_length = batched_anchor_emb.shape[1]
+        n_subspace = batched_anchor_emb.shape[2]
+        d_emb = batched_anchor_emb.shape[3]
         
-        batched_anc_emb = batched_anc_emb\
-            .view(bsz, 1, max_length, n_sp,  d_emb)
+        # (bsz, max_length, n_subspace, d_emb) -> (bsz, bsz, max_length, n_subspace, d_emb)
+        batched_anchor_emb = batched_anchor_emb\
+            .view(bsz, 1, max_length, n_subspace, d_emb)\
+            .expand(bsz, bsz, max_length, n_subspace, d_emb)
         
-        batched_cs_emb = batched_pos_emb\
-            .view(bsz, 1, n_sp, d_emb).expand(bsz, bsz, n_sp, d_emb)\
-            .unsqueeze(2).expand(bsz, bsz, max_length, n_sp, d_emb)
+        # Share same negatives per first dim(bsz)
+        # (bsz, bsz-1, max_length, n_subspace, d_emb)
+        batched_negatives_emb = torch.stack([
+            torch.stack([
+                batched_positive_emb[j] 
+                for j in range(bsz) if batch_i != j
+            ], dim=0) 
+            for batch_i in range(bsz)
+        ], dim=0)\
+            .view(bsz, bsz-1, 1, n_subspace, d_emb)\
+            .expand(bsz, bsz-1, max_length, n_subspace, d_emb)
+        
+        # Share same positive per first dim(bsz)
+        # (bsz, 1, max_length, n_subspace, d_emb)
+        batched_positive_emb = batched_positive_emb\
+            .view(bsz, 1, 1, n_subspace, d_emb)\
+            .expand(bsz, 1, max_length, n_subspace, d_emb)
             
-        mask = torch.eye(bsz, dtype=torch.bool)
-        
-        batched_pos_emb = batched_cs_emb[mask]\
-            .view(bsz, 1, max_length, n_sp, d_emb)
+        # (bsz, bsz, max_length, n_subspace, d_emb)
+        batched_candidates_emb = torch.cat([batched_positive_emb, batched_negatives_emb], dim=1)
             
-        batched_neg_cand_emb = batched_cs_emb[~mask]\
-            .view(bsz, bsz-1, max_length, n_sp, d_emb)
-            
-        ans_pos_cat = [(batched_anc_cat[b_i][anc_i], batched_pos_cat[b_i][0]) for anc_i in range(max_length) for b_i in range(bsz)]
-        w = torch.stack([w[w_idx_dict[i]] for i in ans_pos_cat], dim=0)\
-            .view(bsz, 1, max_length, n_sp, 1)
-
-        batched_anc_emb = torch.sum(batched_anc_emb * w, dim=-2)
-        batched_pos_emb = torch.sum(batched_pos_emb * w, dim=-2)
-        batched_neg_cand_emb = torch.sum(batched_neg_cand_emb * w.expand(bsz, bsz-1, max_length, n_sp, 1), dim=-2)
+        # (bsz, bsz, max_length, n_subspace)
+        w = torch.stack([
+            torch.stack([
+                w[w_idx_dict[(batched_anchor_category[batch_i][item_i], batched_positive_category[batch_i][0])]]
+                for item_i in range(max_length)
+            ], dim=0) 
+            for batch_i in range(bsz)
+        ], dim=0)\
+            .view(bsz, 1, max_length, n_subspace, 1)\
+            .expand(bsz, bsz, max_length, n_subspace, 1) 
         
-        ans_pos_dist = torch.sum(torch.norm(batched_anc_emb - batched_pos_emb, p=2, dim=-1), dim=-1)  # (bsz, 1, max_length) -> (bsz, 1)
-        ans_neg_cand_dist = torch.sum(torch.norm(batched_pos_emb - batched_neg_cand_emb, p=2, dim=-1), dim=-1)  # (bsz, bsz-1, max_length) -> (bsz, bsz-1)
-        ans_neg_dist = ans_neg_cand_dist.gather(1, torch.argmin(ans_neg_cand_dist, dim=-1, keepdim=True))  # (bsz, bsz-1) -> (bsz, 1)
+        batched_anchor_emb = torch.sum(batched_anchor_emb * w, dim=-2)
+        batched_candidates_emb = torch.sum(batched_candidates_emb * w, dim=-2)
         
-        loss = torch.clamp(ans_pos_dist - ans_neg_dist + self.margin, min=0.0)
+        dist_matrix = torch.norm(batched_anchor_emb - batched_candidates_emb, p=2, dim=-1)  # (bsz, bsz, max_length)
+        anchor_positive_dist = dist_matrix[:, 0, :] # (bsz, max_length)
+        
+        negative_dist_matrix = dist_matrix[:, 1:, :] # (bsz, bsz-1, max_length)
+        anchor_negative_dist = negative_dist_matrix.gather(1, torch.argmin(negative_dist_matrix, dim=1, keepdim=True)).squeeze()  # (bsz, bsz-1, max_length) -> (bsz, max_length)
+        
+        # print(negative_dist_matrix.shape)
+        # print(anchor_positive_dist.shape)
+        # print(anchor_negative_dist.shape)
+        # exit()
+        loss = torch.clamp(anchor_positive_dist - anchor_negative_dist + self.margin, min=0.0)
         
         if self.reduction == 'mean':
             loss = torch.mean(loss)
@@ -113,8 +145,8 @@ class InBatchOutfitRankingLoss(nn.Module):
             return loss
         
         # bsz별로 Pos_dist가 ans_neg_cand_dist의 모든 값보다 작은지 확인
-        candidates = torch.cat([ans_pos_dist.detach().cpu(), ans_neg_cand_dist.detach().cpu()], dim=-1)
-        preds = torch.argmin(candidates, dim=-1)
+        dist_matrix = torch.sum(dist_matrix, dim=-1)
+        preds = torch.argmin(dist_matrix, dim=-1)
         labels = torch.zeros(bsz, dtype=torch.long)
         
         return loss, preds, labels
@@ -127,7 +159,7 @@ def parse_args():
     parser.add_argument('--polyvore_type', type=str, choices=['nondisjoint', 'disjoint'],
                         default='nondisjoint')
     parser.add_argument('--batch_sz_per_gpu', type=int,
-                        default=4)
+                        default=20)
     parser.add_argument('--n_workers_per_gpu', type=int,
                         default=4)
     parser.add_argument('--n_epochs', type=int,
@@ -178,7 +210,7 @@ def load_checkpoint(checkpoint_path, enc, sp_attn, rank):
     
     state_dict = torch.load(checkpoint_path, map_location=map_location)
     enc = enc.load_state_dict(state_dict['CSANetEncoder'])
-    sp_atten = sp_attn.load_state_dict(state_dict['CSANetSubspaceAttention'])
+    sp_attn = sp_attn.load_state_dict(state_dict['CSANetSubspaceAttention'])
     
     return enc, sp_attn
 # ----------------------------
@@ -188,11 +220,13 @@ def preprocess(outfits):
     
     def get_max_len_of_sequences(sequences):
         return min(max(len(seq) for seq in sequences), MAX_OUTFIT_LENGTH)
-
-    def pad_sequences(sequences, pad_value, max_length):
-        return [seq[:max_length] + [pad_value] * (max_length - len(seq)) for seq in sequences]
+    
+    def truncate_sequences(sequences, max_length):
+        return [seq[:max_length] for seq in sequences]
     
     max_length = get_max_len_of_sequences(outfits)
+    
+    outfits = truncate_sequences(outfits, max_length)
     
     images = [
         [item.image for item in seq] + [PAD_IMAGE] * (max_length - len(seq)) 
@@ -285,7 +319,7 @@ def train_step(
         cat = cfg.category
         bsz = args.batch_sz_per_gpu
         d_emb = cfg.d_embed
-        n_sp = cfg.n_subspace
+        n_subspace = cfg.n_subspace
         
         # qs: query item"s"
         # a: answer item
@@ -296,13 +330,13 @@ def train_step(
         comb_of_cat = [(cat1, cat2) for cat1 in cat for cat2 in cat]
         w_idx_dict, w = sp_attn(comb_of_cat) # (i.e. ('hat', 'sunglass')): (Array of dim [n_subspace])
         
-        batched_anc_img, batched_anc_cat, mask, max_length = preprocess(batched_qs)
-        batched_pos_img, batched_pos_cat, _, _ = preprocess([[a] for a in batched_a])
+        batched_anc_img, batched_anchor_category, mask, max_length = preprocess(batched_qs)
+        batched_pos_img, batched_positive_category, _, _ = preprocess([[a] for a in batched_a])
         
-        batched_anc_emb = enc(sum(batched_anc_img, [])).view(bsz, max_length, n_sp, d_emb)
-        batched_pos_emb = enc(sum(batched_pos_img, [])).view(bsz, n_sp, d_emb)
+        batched_anc_emb = enc(sum(batched_anc_img, [])).view(bsz, max_length, n_subspace, d_emb)
+        batched_positive_emb = enc(sum(batched_pos_img, [])).view(bsz, n_subspace, d_emb)
         
-        loss, preds, labels = loss_fn(w_idx_dict, w, batched_anc_cat, batched_anc_emb, batched_pos_cat, batched_pos_emb, mask)
+        loss, preds, labels = loss_fn(w_idx_dict, w, batched_anchor_category, batched_anc_emb, batched_positive_category, batched_positive_emb, mask)
         
         loss = loss / args.accumulation_steps
         
@@ -311,13 +345,15 @@ def train_step(
             optimizer.step()
             optimizer.zero_grad()
             scheduler.step()
-
+            
+        preds = preds.detach().cpu()
+        labels = labels.detach().cpu()
         score = compute_cir_scores(preds, labels)
         
         # Accumulate Results
         all_loss += loss.item() * args.accumulation_steps / len(dataloader)
-        all_preds.append(preds.detach())
-        all_labels.append(labels.detach())
+        all_preds.append(preds)
+        all_labels.append(labels)
 
         # Logging
         logs = {
@@ -331,8 +367,8 @@ def train_step(
             logs = {f'train_{k}': v for k, v in logs.items()}
             wandb_run.log(logs)
     
-    all_preds = torch.cat(all_preds).to(rank)
-    all_labels = torch.cat(all_labels).to(rank)
+    all_preds = torch.cat(all_preds)
+    all_labels = torch.cat(all_labels)
 
     gathered_loss, gathered_preds, gathered_labels = gather_results(all_loss, all_preds, all_labels)
     output = {'loss': gathered_loss.item(), **compute_cir_scores(gathered_preds, gathered_labels)} if rank == 0 else {}
@@ -394,7 +430,9 @@ def train(
     wandb_run: Optional[wandb.sdk.wandb_run.Run] = None
 ):      
     # Setup
-    setup(rank, world_size)
+    is_distributed = torch.distributed.is_initialized()
+    if is_distributed:
+        setup(rank, world_size)
     
     # Logging Setup
     project_name = f'complementary_' + (

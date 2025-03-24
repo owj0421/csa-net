@@ -25,6 +25,7 @@ def load_model(checkpoint=None, **cfg_kwargs):
         rank = get_rank()
     else:
         rank = 0
+        
     map_location = f'cuda:{rank}' if torch.cuda.is_available() else 'cpu'
         
     if checkpoint:
